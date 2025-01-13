@@ -21,8 +21,6 @@ FLOWISE_API_ENDPOINT = os.getenv("FLOWISE_API_ENDPOINT", "http://localhost:3000"
 FLOWISE_CHATFLOW_ID = os.getenv("FLOWISE_CHATFLOW_ID")
 FLOWISE_ASSISTANT_ID = os.getenv("FLOWISE_ASSISTANT_ID")
 FLOWISE_CHATFLOW_DESCRIPTION = os.getenv("FLOWISE_CHATFLOW_DESCRIPTION")
-FLOWISE_CHATFLOW_WHITELIST = os.getenv("FLOWISE_CHATFLOW_WHITELIST")
-FLOWISE_CHATFLOW_BLACKLIST = os.getenv("FLOWISE_CHATFLOW_BLACKLIST")
 
 DEBUG = os.getenv("DEBUG", "").lower() in ("true", "1", "yes")
 
@@ -45,68 +43,36 @@ def list_chatflows() -> str:
     """
     List all available chatflows from the Flowise API.
 
-    This function respects optional whitelisting or blacklisting if configured
-    via FLOWISE_CHATFLOW_WHITELIST or FLOWISE_CHATFLOW_BLACKLIST.
-
     Returns:
         str: A JSON-encoded string of filtered chatflows.
     """
     logger.debug("Handling list_chatflows tool.")
     chatflows = fetch_chatflows()
 
-    # Apply whitelisting
-    if FLOWISE_CHATFLOW_WHITELIST:
-        whitelist = set(FLOWISE_CHATFLOW_WHITELIST.split(","))
-        chatflows = [cf for cf in chatflows if cf["id"] in whitelist]
-        logger.debug(f"Applied whitelist filter: {whitelist}")
-
-    # Apply blacklisting
-    if FLOWISE_CHATFLOW_BLACKLIST:
-        blacklist = set(FLOWISE_CHATFLOW_BLACKLIST.split(","))
-        chatflows = [cf for cf in chatflows if cf["id"] not in blacklist]
-        logger.debug(f"Applied blacklist filter: {blacklist}")
-
     logger.debug(f"Filtered chatflows: {chatflows}")
     return json.dumps(chatflows)
 
 
 @mcp.tool()
-def create_prediction(*, chatflow_id: str = None, question: str) -> str:
+def create_prediction(*, model_type: str, model_id: str, question: str) -> str:
     """
     Create a prediction by sending a question to a specific chatflow or assistant.
 
     Args:
-        chatflow_id (str, optional): The ID of the chatflow to use. Defaults to FLOWISE_CHATFLOW_ID.
+        model_type (str): Type of model ('chatflow' or 'assistant').
+        model_id (str): The ID of the Flowise model to be used.
         question (str): The question or prompt to send to the chatflow.
 
     Returns:
         str: The prediction result or an error message.
     """
-    logger.debug(f"create_prediction called with chatflow_id={chatflow_id}, question={question}")
-    chatflow_id = chatflow_id or FLOWISE_CHATFLOW_ID
+    logger.debug(f"create_prediction called with model_type={model_type}, model_id={model_id}, question={question}")
+    
+    if not model_id:
+        logger.error("No model_id provided for prediction.")
+        return "Error: model_id is required."
 
-    if not chatflow_id and not FLOWISE_ASSISTANT_ID:
-        logger.error("No chatflow_id or assistant_id provided or pre-configured.")
-        return "Error: chatflow_id or assistant_id is required."
-
-    if chatflow_id:
-        # If a chatflow ID is provided, attach a custom description if configured
-        if FLOWISE_CHATFLOW_DESCRIPTION:
-            logger.debug(f"Using description for chatflow {chatflow_id}: {FLOWISE_CHATFLOW_DESCRIPTION}")
-
-            # Nested tool with custom description
-            @mcp.tool(description=FLOWISE_CHATFLOW_DESCRIPTION)
-            def create_prediction_with_description(*, question: str) -> str:
-                logger.debug(f"create_prediction_with_description called with chatflow_id={chatflow_id}, question={question}")
-                return flowise_predict(chatflow_id, question)
-
-            return create_prediction_with_description(question=question)
-        else:
-            logger.debug(f"No custom description set for chatflow {chatflow_id}.")
-            return flowise_predict(chatflow_id, question)
-    else:
-        # Use assistant ID if no chatflow ID is provided
-        return flowise_predict(FLOWISE_ASSISTANT_ID, question)
+    return flowise_predict(model_type, model_id, question)
 
 
 def run_server():

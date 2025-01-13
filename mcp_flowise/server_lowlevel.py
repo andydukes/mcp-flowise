@@ -1,20 +1,18 @@
-'''
+"""
 Low-Level Server for the Flowise MCP.
 
-This server dynamically registers tools based on the provided chatflows
-retrieved from the Flowise API. Tool names are normalized for safety 
+This server dynamically registers tools and assistants based on the provided models
+retrieved from the Flowise API. Tool names are normalized for safety
 and consistency, and potential conflicts are logged.
 
-Descriptions for tools are prioritized from FLOWISE_CHATFLOW_DESCRIPTIONS,
-falling back to the chatflow names when not provided.
-
-Conflicts in tool names after normalization are handled gracefully by
-skipping those chatflows.
-'''
+Descriptions for tools are prioritized from FLOWISE_MODEL_DESCRIPTIONS,
+falling back to the model names when not provided.
+"""
 
 import os
 import re
 import sys
+import json  # Added import for JSON serialization
 import asyncio
 from typing import List, Dict
 from dotenv import load_dotenv
@@ -36,32 +34,32 @@ load_dotenv()
 DEBUG = os.getenv("DEBUG", "").lower() in ("true", "1", "yes")
 logger = setup_logging(debug=DEBUG)
 
-# Global tool mapping: tool name to chatflow ID
+# Global tool mapping: tool name to (model ID, model type)
 NAME_TO_ID_MAPPING = {}
 
 # Initialize the Low-Level MCP Server
 mcp = Server("FlowiseMCP-with-EnvAuth")
 
 
-def get_chatflow_descriptions() -> Dict[str, str]:
+def get_model_descriptions() -> Dict[str, str]:
     """
-    Parse the FLOWISE_CHATFLOW_DESCRIPTIONS environment variable for descriptions.
+    Parse the FLOWISE_MODEL_DESCRIPTIONS environment variable for descriptions.
 
     Returns:
-        dict: A dictionary mapping chatflow IDs to descriptions.
+        dict: A dictionary mapping model IDs to descriptions.
     """
-    descriptions_env = os.getenv("FLOWISE_CHATFLOW_DESCRIPTIONS", "")
-    logger.debug("Retrieved FLOWISE_CHATFLOW_DESCRIPTIONS: %s", descriptions_env)
+    descriptions_env = os.getenv("FLOWISE_MODEL_DESCRIPTIONS", "")
+    logger.debug("Retrieved FLOWISE_MODEL_DESCRIPTIONS: %s", descriptions_env)
 
     descriptions = {}
     for pair in descriptions_env.split(","):
         if ":" not in pair:
-            logger.warning("Invalid format in FLOWISE_CHATFLOW_DESCRIPTIONS: %s", pair)
+            logger.warning("Invalid format in FLOWISE_MODEL_DESCRIPTIONS: %s", pair)
             continue
-        chatflow_id, description = map(str.strip, pair.split(":", 1))
-        if chatflow_id and description:
-            descriptions[chatflow_id] = description
-    logger.debug("Parsed FLOWISE_CHATFLOW_DESCRIPTIONS: %s", descriptions)
+        model_id, description = map(str.strip, pair.split(":", 1))
+        if model_id and description:
+            descriptions[model_id] = description
+    logger.debug("Parsed FLOWISE_MODEL_DESCRIPTIONS: %s", descriptions)
     return descriptions
 
 
@@ -89,8 +87,8 @@ async def dispatcher_handler(request: types.CallToolRequest) -> types.ServerResu
                 )
             )
 
-        # Map the tool name to its associated chatflow ID
-        chatflow_id = NAME_TO_ID_MAPPING[tool_name]
+        # Map the tool name to its associated model ID and type
+        model_id, model_type = NAME_TO_ID_MAPPING[tool_name]
         question = request.params.arguments.get("question")
 
         # Validate the question argument
@@ -102,10 +100,10 @@ async def dispatcher_handler(request: types.CallToolRequest) -> types.ServerResu
                 )
             )
 
-        logger.debug("Dispatching prediction for chatflow_id: %s with question: %s", chatflow_id, question)
+        logger.debug("Dispatching prediction for model_id: %s, model_type: %s with question: %s", model_id, model_type, question)
 
         # Call the prediction function
-        result = flowise_predict(chatflow_id, question)
+        result = flowise_predict(model_type, model_id, question)
         logger.debug("Received prediction result: %s", result)
 
         return types.ServerResult(
@@ -119,7 +117,6 @@ async def dispatcher_handler(request: types.CallToolRequest) -> types.ServerResu
 
         try:
             # Attempt to log the raw request
-            import json
             raw_request = json.dumps(request.model_dump(), indent=2) if hasattr(request, 'model_dump') else str(request)
             logger.error("Raw request causing the error: %s", raw_request)
         except Exception as log_error:
@@ -135,59 +132,62 @@ async def dispatcher_handler(request: types.CallToolRequest) -> types.ServerResu
 
 def run_server():
     '''
-    Run the Low-Level Flowise server by registering tools dynamically.
+    Run the Low-Level Flowise server by registering tools and assistants dynamically.
     '''
     try:
-        # Fetch chatflows dynamically from the Flowise API
-        chatflows = fetch_chatflows()
-        if not chatflows:
-            raise ValueError("No chatflows retrieved from the Flowise API.")
+        # Fetch and filter models dynamically from the Flowise API
+        models = fetch_chatflows()
+        if not models['chatflows'] and not models['assistants']:
+            raise ValueError("No chatflows or assistants retrieved from the Flowise API.")
     except Exception as e:
         logger.critical("Failed to start server: %s", e)
         sys.exit(1)
 
     # Get descriptions from environment variable
-    chatflow_descriptions = get_chatflow_descriptions()
+    model_descriptions = get_model_descriptions()
 
     tools = []
-    for chatflow in chatflows:
-        try:
-            # Normalize the tool name to ensure it's safe for use
-            normalized_name = normalize_tool_name(chatflow["name"])
+    for model_type in ['chatflows', 'assistants']:
+        singular_model_type = 'chatflow' if model_type == 'chatflows' else 'assistant'
+        for model in models[model_type]:
+            try:
+                # Normalize the tool name to ensure it's safe for use
+                normalized_name = normalize_tool_name(model["name"])
 
-            if normalized_name in NAME_TO_ID_MAPPING:
-                logger.warning(
-                    "Tool name conflict: '%s' already exists. Skipping chatflow '%s' (ID: '%s').",
-                    normalized_name,
-                    chatflow["name"],
-                    chatflow["id"],
+                if normalized_name in NAME_TO_ID_MAPPING:
+                    logger.warning(
+                        "Tool name conflict: '%s' already exists. Skipping %s '%s' (ID: '%s').",
+                        normalized_name,
+                        singular_model_type,
+                        model["name"],
+                        model["id"],
+                    )
+                    continue
+
+                # Register the normalized name and model ID along with its type
+                NAME_TO_ID_MAPPING[normalized_name] = (model["id"], singular_model_type)
+
+                # Use the description from the environment variable, fallback to the model name
+                description = model_descriptions.get(model["id"], model["name"])
+
+                # Create the tool using the normalized name and description
+                tool = types.Tool(
+                    name=normalized_name,
+                    description=description,
+                    inputSchema={
+                        "type": "object",
+                        "required": ["question"],
+                        "properties": {"question": {"type": "string"}},
+                    },
                 )
-                continue
+                tools.append(tool)
+                logger.info("Registered %s: %s (ID: %s)", singular_model_type, tool.name, model["id"])
 
-            # Register the normalized name and chatflow ID
-            NAME_TO_ID_MAPPING[normalized_name] = chatflow["id"]
-
-            # Use the description from the environment variable, fallback to the chatflow name
-            description = chatflow_descriptions.get(chatflow["id"], chatflow["name"])
-
-            # Create the tool using the normalized name and description
-            tool = types.Tool(
-                name=normalized_name,
-                description=description,
-                inputSchema={
-                    "type": "object",
-                    "required": ["question"],
-                    "properties": {"question": {"type": "string"}},
-                },
-            )
-            tools.append(tool)
-            logger.info("Registered tool: %s (ID: %s)", tool.name, chatflow["id"])
-
-        except Exception as e:
-            logger.error("Error registering chatflow '%s' (ID: '%s'): %s", chatflow["name"], chatflow["id"], e)
+            except Exception as e:
+                logger.error("Error registering %s '%s' (ID: '%s'): %s", singular_model_type, model["name"], model["id"], e)
 
     if not tools:
-        logger.critical("No valid tools registered. Shutting down the server.")
+        logger.critical("No valid tools or assistants registered. Shutting down the server.")
         sys.exit(1)
 
     # Register the dispatcher handler for handling tool requests

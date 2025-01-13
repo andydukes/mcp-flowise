@@ -1,11 +1,11 @@
 """
-Utility functions for mcp_flowise, including logging setup, chatflow filtering, and Flowise API interactions.
+Utility functions for mcp_flowise, including logging setup, model filtering, and Flowise API interactions.
 
 This module centralizes shared functionality such as:
 1. Logging configuration for consistent log output across the application.
 2. Safe redaction of sensitive data like API keys in logs.
-3. Low-level interactions with the Flowise API for predictions and chatflow management.
-4. Flexible filtering of chatflows based on whitelist/blacklist criteria.
+3. Low-level interactions with the Flowise API for predictions and model management.
+4. Flexible filtering of models based on whitelist/blacklist criteria.
 """
 
 import os
@@ -13,6 +13,7 @@ import sys
 import logging
 import requests
 import re
+import json
 from dotenv import load_dotenv
 
 # Load environment variables from .env if present
@@ -37,7 +38,7 @@ def setup_logging(debug: bool = False, log_dir: str = None, log_file: str = "deb
     """
     if log_dir is None:
         log_dir = os.path.join(os.path.expanduser("~"), "mcp_logs")
-    
+
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     logger.propagate = False  # Prevent log messages from propagating to the root logger
@@ -113,82 +114,197 @@ def normalize_tool_name(name: str) -> str:
     return normalized or "unknown_tool"
 
 
-def filter_chatflows(chatflows: list[dict]) -> list[dict]:
+def filter_models(model_list: list, model_type: str) -> list:
     """
-    Filters chatflows based on whitelist and blacklist criteria.
+    Filters models (chatflows or assistants) based on whitelist and blacklist criteria.
     Whitelist takes precedence over blacklist.
 
     Args:
-        chatflows (list[dict]): A list of chatflow dictionaries.
+        model_list (list): List of model dictionaries.
+        model_type (str): Type of model ('chatflow' or 'assistant').
 
     Returns:
-        list[dict]: Filtered list of chatflows.
+        list: Filtered list of models.
     """
     logger = logging.getLogger(__name__)
 
-    # Dynamically fetch filtering criteria
-    whitelist_ids = set(filter(bool, os.getenv("FLOWISE_WHITELIST_ID", "").split(",")))
-    blacklist_ids = set(filter(bool, os.getenv("FLOWISE_BLACKLIST_ID", "").split(",")))
-    whitelist_name_regex = os.getenv("FLOWISE_WHITELIST_NAME_REGEX", "")
-    blacklist_name_regex = os.getenv("FLOWISE_BLACKLIST_NAME_REGEX", "")
+    # Define environment variable keys based on model_type
+    if model_type == "chatflow":
+        whitelist_ids = set(filter(bool, os.getenv("FLOWISE_WHITELIST_CHATFLOW_IDS", "").split(",")))
+        blacklist_ids = set(filter(bool, os.getenv("FLOWISE_BLACKLIST_CHATFLOW_IDS", "").split(",")))
+        whitelist_name_regex = os.getenv("FLOWISE_WHITELIST_CHATFLOW_NAME_REGEX", "")
+        blacklist_name_regex = os.getenv("FLOWISE_BLACKLIST_CHATFLOW_NAME_REGEX", "")
+    elif model_type == "assistant":
+        whitelist_ids = set(filter(bool, os.getenv("FLOWISE_WHITELIST_ASSISTANT_IDS", "").split(",")))
+        blacklist_ids = set(filter(bool, os.getenv("FLOWISE_BLACKLIST_ASSISTANT_IDS", "").split(",")))
+        whitelist_name_regex = os.getenv("FLOWISE_WHITELIST_ASSISTANT_NAME_REGEX", "")
+        blacklist_name_regex = os.getenv("FLOWISE_BLACKLIST_ASSISTANT_NAME_REGEX", "")
+    else:
+        logger.error(f"Unknown model type: {model_type}")
+        return []
 
-    filtered_chatflows = []
+    filtered_models = []
 
-    for chatflow in chatflows:
-        chatflow_id = chatflow.get("id", "")
-        chatflow_name = chatflow.get("name", "")
+    for model in model_list:
+        model_id = model.get("id", "")
+        model_name = model.get("name", "")
 
-        # Flags to determine inclusion
         is_whitelisted = False
-
-        # Check Whitelist
+        # Whitelist logic
         if whitelist_ids or whitelist_name_regex:
-            if whitelist_ids and chatflow_id in whitelist_ids:
+            if whitelist_ids and model_id in whitelist_ids:
                 is_whitelisted = True
-            if whitelist_name_regex and re.search(whitelist_name_regex, chatflow_name):
+            if whitelist_name_regex and re.search(whitelist_name_regex, model_name, re.IGNORECASE):
                 is_whitelisted = True
 
             if is_whitelisted:
-                # If whitelisted, include regardless of blacklist
-                logger.debug("Including whitelisted chatflow '%s' (ID: '%s').", chatflow_name, chatflow_id)
-                filtered_chatflows.append(chatflow)
-                continue  # Skip blacklist checks
-            else:
-                # If not whitelisted, exclude regardless of blacklist
-                logger.debug("Excluding non-whitelisted chatflow '%s' (ID: '%s').", chatflow_name, chatflow_id)
+                # Whitelisted => included, skip blacklist
+                filtered_models.append(model)
+                logger.debug(f"Including whitelisted {model_type} '{model_name}' (ID: '{model_id}').")
                 continue
-        else:
-            # If no whitelist, apply blacklist directly
-            if blacklist_ids and chatflow_id in blacklist_ids:
-                logger.debug("Skipping chatflow '%s' (ID: '%s') - In blacklist.", chatflow_name, chatflow_id)
-                continue  # Exclude blacklisted by ID
-            if blacklist_name_regex and re.search(blacklist_name_regex, chatflow_name):
-                logger.debug("Skipping chatflow '%s' (ID: '%s') - Name matches blacklist regex.", chatflow_name, chatflow_id)
-                continue  # Exclude blacklisted by name
+            else:
+                # Not whitelisted => excluded
+                logger.debug(f"Excluding non-whitelisted {model_type} '{model_name}' (ID: '{model_id}').")
+                continue
 
-            # Include the chatflow if it passes all filters
-            logger.debug("Including chatflow '%s' (ID: '%s').", chatflow_name, chatflow_id)
-            filtered_chatflows.append(chatflow)
+        # If we didn't have a whitelist, apply the blacklist
+        if blacklist_ids and model_id in blacklist_ids:
+            logger.debug(f"Excluding {model_type} '{model_name}' (ID: '{model_id}') in blacklist.")
+            continue
+        if blacklist_name_regex and re.search(blacklist_name_regex, model_name, re.IGNORECASE):
+            logger.debug(f"Excluding {model_type} '{model_name}' (ID: '{model_id}') matches blacklist regex.")
+            continue
 
-    logger.info("Filtered chatflows: %d out of %d", len(filtered_chatflows), len(chatflows))
-    return filtered_chatflows
+        # Passed all checks => included
+        filtered_models.append(model)
+        logger.debug(f"Including {model_type} '{model_name}' (ID: '{model_id}').")
+
+    logger.info(f"Filtered {model_type}s: {len(filtered_models)} out of {len(model_list)}")
+    return filtered_models
 
 
-def flowise_predict(chatflow_id: str, question: str) -> str:
+def fetch_models() -> dict:
     """
-    Sends a question to a specific chatflow ID via the Flowise API and returns the response text.
+    Fetch a list of all chatflows and assistants from the Flowise API.
+
+    Returns:
+        dict: Dictionary containing 'chatflows' and 'assistants' lists.
+              Each list contains dictionaries with 'id' and 'name'.
+              Returns empty lists if there's an error.
+    """
+    logger = logging.getLogger(__name__)
+
+    models = {
+        "chatflows": [],
+        "assistants": []
+    }
+
+    # Define endpoints based on model types
+    endpoints = {
+        "chatflows": "/api/v1/chatflows",
+        "assistants": "/api/v1/assistants"
+    }
+
+    for model_type, endpoint_suffix in endpoints.items():
+        url = f"{FLOWISE_API_ENDPOINT.rstrip('/')}{endpoint_suffix}"
+        headers = {}
+        if FLOWISE_API_KEY:
+            headers["Authorization"] = f"Bearer {FLOWISE_API_KEY}"
+
+        logger.debug(f"Fetching {model_type} from {url}")
+
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            simplified_models = [{"id": m["id"], "name": m["name"]} for m in data]
+
+            logger.debug(f"Fetched {model_type}: {simplified_models}")
+
+            models[model_type] = simplified_models
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching {model_type}: {e}")
+            continue  # Proceed to next model_type
+
+    return models
+
+
+def filter_all_models(models: dict) -> dict:
+    """
+    Apply filtering to both chatflows and assistants.
 
     Args:
-        chatflow_id (str): The ID of the Flowise chatflow to be used.
-        question (str): The question or prompt to send to the chatflow.
+        models (dict): Dictionary containing 'chatflows' and 'assistants' lists.
+
+    Returns:
+        dict: Filtered models with 'chatflows' and 'assistants'.
+    """
+    logger = logging.getLogger(__name__)
+    filtered = {}
+    # Correctly map model categories to their singular model types
+    for category, model_type in [('chatflows', 'chatflow'), ('assistants', 'assistant')]:
+        filtered[category] = filter_models(models.get(category, []), model_type)
+    return filtered
+
+
+def fetch_and_filter_models() -> dict:
+    """
+    Fetch models from Flowise API and apply filtering.
+
+    Returns:
+        dict: Filtered models with 'chatflows' and 'assistants'.
+    """
+    models = fetch_models()
+    filtered_models = filter_all_models(models)
+    return filtered_models
+
+
+def fetch_chatflows() -> dict:
+    """
+    Fetch and filter chatflows and assistants from the Flowise API.
+
+    Returns:
+        dict: Dictionary containing 'chatflows' and 'assistants' lists.
+              Each list contains dictionaries with 'id' and 'name'.
+              Returns empty lists if there's an error.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        filtered_models = fetch_and_filter_models()
+        logger.debug(f"Filtered models: {filtered_models}")
+        return filtered_models
+    except Exception as e:
+        logger.error(f"Error in fetch_chatflows: {e}")
+        return {"chatflows": [], "assistants": []}
+
+
+def flowise_predict(model_type: str, model_id: str, question: str) -> str:
+    """
+    Sends a question to a specific model (chatflow or assistant) via the Flowise API and returns the response text.
+
+    Args:
+        model_type (str): Type of model ('chatflow' or 'assistant').
+        model_id (str): The ID of the Flowise model to be used.
+        question (str): The question or prompt to send to the model.
 
     Returns:
         str: The response text from the Flowise API or an error string if something went wrong.
     """
     logger = logging.getLogger(__name__)
 
+    # Determine endpoint based on model type
+    if model_type == "chatflow":
+        endpoint_suffix = "/api/v1/prediction/"
+    elif model_type == "assistant":
+        endpoint_suffix = "/api/v1/prediction/assistant/"
+    else:
+        logger.error(f"Invalid model_type: {model_type}")
+        return f"Error: Invalid model_type '{model_type}'"
+
     # Construct the Flowise API URL for predictions
-    url = f"{FLOWISE_API_ENDPOINT.rstrip('/')}/api/v1/prediction/{chatflow_id}"
+    url = f"{FLOWISE_API_ENDPOINT.rstrip('/')}{endpoint_suffix}{model_id}"
     headers = {
         "Content-Type": "application/json",
     }
@@ -196,7 +312,7 @@ def flowise_predict(chatflow_id: str, question: str) -> str:
         headers["Authorization"] = f"Bearer {FLOWISE_API_KEY}"
 
     payload = {
-        "chatflowId": chatflow_id,
+        "modelId": model_id,  # Adjust key if different for assistants
         "question": question,
         "streaming": False
     }
@@ -212,47 +328,3 @@ def flowise_predict(chatflow_id: str, question: str) -> str:
         # Log and return the error as a string
         logger.error(f"Error during prediction: {e}")
         return f"Error: {str(e)}"
-
-
-def fetch_chatflows() -> list[dict]:
-    """
-    Fetch a list of all chatflows from the Flowise API.
-
-    Returns:
-        list of dict: Each dict contains the 'id' and 'name' of a chatflow.
-                      Returns an empty list if there's an error.
-    """
-    logger = logging.getLogger(__name__)
-
-    # Construct the Flowise API URL for fetching chatflows
-    url = f"{FLOWISE_API_ENDPOINT.rstrip('/')}/api/v1/chatflows"
-    headers = {}
-    if FLOWISE_API_KEY:
-        headers["Authorization"] = f"Bearer {FLOWISE_API_KEY}"
-
-    logger.debug(f"Fetching chatflows from {url}")
-
-    try:
-        # Send GET request to the Flowise API
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-
-        # Parse and simplify the response data
-        chatflows_data = response.json()
-        simplified_chatflows = [{"id": cf["id"], "name": cf["name"]} for cf in chatflows_data]
-
-        logger.debug(f"Fetched chatflows: {simplified_chatflows}")
-        return filter_chatflows(simplified_chatflows)
-    except requests.exceptions.RequestException as e:
-        # Log and return an empty list on error
-        logger.error(f"Error fetching chatflows: {e}")
-        return []
-
-
-# Set up logging before obtaining the logger
-DEBUG = os.getenv("DEBUG", "").lower() in ("true", "1", "yes")
-logger = setup_logging(debug=DEBUG)
-
-# Log key environment variable values
-logger.info(f"Flowise API Key (redacted): {redact_api_key(FLOWISE_API_KEY)}")
-logger.info(f"Flowise API Endpoint: {FLOWISE_API_ENDPOINT}")

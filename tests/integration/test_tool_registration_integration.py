@@ -1,10 +1,11 @@
 import os
 import unittest
-import asyncio
-from mcp_flowise.server_lowlevel import run_server
+from unittest.mock import patch, MagicMock
+from mcp_flowise.server_fastmcp import run_server
 from mcp import types
 from multiprocessing import Process
 from time import sleep
+import asyncio  # Added import for asyncio
 
 
 class TestToolRegistrationIntegration(unittest.TestCase):
@@ -17,30 +18,23 @@ class TestToolRegistrationIntegration(unittest.TestCase):
         """
         Set up the test environment and server.
         """
-        # Set the environment variable for chatflow descriptions
-        os.environ["FLOWISE_CHATFLOW_DESCRIPTIONS"] = (
+        # Set the environment variable for model descriptions
+        os.environ["FLOWISE_MODEL_DESCRIPTIONS"] = (
             "chatflow1:Test Chatflow 1,chatflow2:Test Chatflow 2"
         )
 
-        # Start the server using asyncio.create_task
-        # cls.loop = asyncio.get_event_loop()
-        cls.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(cls.loop)
-        cls.server_task = cls.loop.create_task(cls.start_server())
-
-    @classmethod
-    async def start_server(cls):
-        """
-        Start the server as a coroutine.
-        """
-        await run_server()
+        # Start the server in a separate process
+        cls.server_process = Process(target=run_server, daemon=True)
+        cls.server_process.start()
+        sleep(2)  # Wait for the server to start
 
     @classmethod
     def tearDownClass(cls):
         """
-        Clean up the server task.
+        Clean up the server process.
         """
-        cls.server_task.cancel()
+        cls.server_process.terminate()
+        cls.server_process.join()
 
     def test_tool_registration_and_listing(self):
         """
@@ -55,11 +49,35 @@ class TestToolRegistrationIntegration(unittest.TestCase):
 
             # Validate the response
             tools = response.root.tools
-            assert len(tools) == 2, "Expected 2 tools to be registered"
-            assert tools[0].name == "test_chatflow_1"
-            assert tools[0].description == "Test Chatflow 1"
-            assert tools[1].name == "test_chatflow_2"
-            assert tools[1].description == "Test Chatflow 2"
+            expected_tools = [
+                {
+                    "name": "test_chatflow_1",
+                    "description": "Test Chatflow 1",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"}
+                        },
+                        "required": ["question"]
+                    }
+                },
+                {
+                    "name": "test_chatflow_2",
+                    "description": "Test Chatflow 2",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"}
+                        },
+                        "required": ["question"]
+                    }
+                },
+            ]
+            self.assertEqual(len(tools), 2, "Expected 2 tools to be registered")
+            for tool, expected in zip(tools, expected_tools):
+                self.assertEqual(tool.name, expected["name"])
+                self.assertEqual(tool.description, expected["description"])
+                self.assertEqual(tool.inputSchema, expected["inputSchema"])
 
         asyncio.run(run_client())
 
@@ -67,6 +85,7 @@ class TestToolRegistrationIntegration(unittest.TestCase):
         """
         Mock client request for testing purposes. Replace with actual client logic.
         """
+        # This is a placeholder. Implement actual communication with the server if needed.
         return types.ServerResult(
             root=types.ListToolsResult(
                 tools=[
