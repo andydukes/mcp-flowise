@@ -11,8 +11,9 @@ authors = [
   { name = "Matthew Hand", email = "matthewhandau@gmail.com" }
 ]
 dependencies = [
+  "httpx>=0.28.1",
   "mcp[cli]>=1.2.0",
-  "requests>=2.25.0"
+  "requests>=2.25.0",
 ]
 
 [project.scripts]

@@ -44,7 +44,7 @@ npx -y @smithery/cli install @matthewhand/mcp-flowise --client claude
 Confirm you can run the server directly from the GitHub repository using `uvx`:
 
 ```bash
-uvx --from git+https://github.com/matthewhand/mcp-flowise mcp-flowise
+uvx --from git+https://github.com/andydukes/mcp-flowise mcp-flowise
 ```
 
 ### Adding to MCP Ecosystem (`mcpServers` Configuration)
@@ -58,7 +58,7 @@ You can integrate `mcp-flowise` into your MCP ecosystem by adding it to the `mcp
             "command": "uvx",
             "args": [
                 "--from",
-                "git+https://github.com/matthewhand/mcp-flowise",
+                "git+https://github.com/andydukes/mcp-flowise",
                 "mcp-flowise"
             ],
             "env": {
@@ -116,7 +116,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
         "LOGLEVEL": "ERROR",
         "APPDATA": "C:\\Users\\matth\\AppData\\Roaming",
         "FLOWISE_API_KEY": "your-api-key-goes-here",
-        "FLOWISE_API_ENDPOINT": "http://localhost:3000/"
+        "FLOWISE_API_ENDPOINT": "http://localhost:3002/"
       }
     }
   }
@@ -134,7 +134,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
 ### General
 
 - `FLOWISE_API_KEY`: Your Flowise API Bearer token (**required**).
-- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:3000`).
+- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:3002`).
 
 ### LowLevel Mode (Default)
 
