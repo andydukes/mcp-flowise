@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Flowise API configuration
-FLOWISE_API_KEY = os.getenv("FLOWISE_API_KEY", "")
-FLOWISE_API_ENDPOINT = os.getenv("FLOWISE_API_ENDPOINT", "http://localhost:3000")
+FLOWISE_API_KEY = os.getenv("FLOWISE_API_KEY", "HsPt77beDamAw8_ZukdqsNk1P4XRRDXY55HnLNF9MAs")
+FLOWISE_API_ENDPOINT = os.getenv("FLOWISE_API_ENDPOINT", "http://localhost:3006")
 
 
 def setup_logging(debug: bool = False, log_dir: str = None, log_file: str = "debug-mcp-flowise.log") -> logging.Logger:
