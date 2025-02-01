@@ -116,7 +116,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
         "LOGLEVEL": "ERROR",
         "APPDATA": "C:\\Users\\matth\\AppData\\Roaming",
         "FLOWISE_API_KEY": "your-api-key-goes-here",
-        "FLOWISE_API_ENDPOINT": "http://localhost:/"
+        "FLOWISE_API_ENDPOINT": "http://localhost:3006/"
       }
     }
   }
@@ -134,7 +134,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
 ### General
 
 - `FLOWISE_API_KEY`: Your Flowise API Bearer token (**required**).
-- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:`).
+- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:3006`).
 
 ### LowLevel Mode (Default)
 
