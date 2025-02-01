@@ -1,5 +1,5 @@
 # Use a Python base image that satisfies the project requirements
-FROM python:3.12-slim AS base
+FROM python:3.13-slim AS base
 
 # Install the uv package manager
 RUN apt-get update && apt-get install -y build-essential && pip install uv
