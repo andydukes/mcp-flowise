@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "MCP integration with the Flowise API for creating predictions and managing chatflows/assistants"
 readme = "README.md"
 authors = [
-  { name = "Matthew Hand", email = "matthewhandau@gmail.com" }
+  { name = "Matthew Hand", email = "andydukesau@gmail.com" }
 ]
 dependencies = [
   "mcp[cli]>=1.2.0",

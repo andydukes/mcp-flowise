@@ -13,7 +13,7 @@ from mcp_flowise.utils import flowise_predict, fetch_chatflows, redact_api_key, 
 
 # Environment variables
 FLOWISE_API_KEY = os.getenv("FLOWISE_API_KEY", "")
-FLOWISE_API_ENDPOINT = os.getenv("FLOWISE_API_ENDPOINT", "http://localhost:3000")
+FLOWISE_API_ENDPOINT = os.getenv("FLOWISE_API_ENDPOINT", "http://localhost:3010")
 FLOWISE_CHATFLOW_ID = os.getenv("FLOWISE_CHATFLOW_ID")
 FLOWISE_ASSISTANT_ID = os.getenv("FLOWISE_ASSISTANT_ID")
 FLOWISE_CHATFLOW_DESCRIPTION = os.getenv("FLOWISE_CHATFLOW_DESCRIPTION")

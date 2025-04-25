@@ -1,6 +1,6 @@
 # mcp-flowise
 
-[![smithery badge](https://smithery.ai/badge/@matthewhand/mcp-flowise)](https://smithery.ai/server/@matthewhand/mcp-flowise)
+[![smithery badge](https://smithery.ai/badge/@andydukes/mcp-flowise)](https://smithery.ai/server/@andydukes/mcp-flowise)
 
 `mcp-flowise` is a Python package implementing a Model Context Protocol (MCP) server that integrates with the Flowise API. It provides a standardized and flexible way to list chatflows, create predictions, and dynamically register tools for Flowise chatflows or assistants.
 
@@ -28,10 +28,10 @@ It supports two operation modes:
 
 ### Installing via Smithery
 
-To install mcp-flowise for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@matthewhand/mcp-flowise):
+To install mcp-flowise for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@andydukes/mcp-flowise):
 
 ```bash
-npx -y @smithery/cli install @matthewhand/mcp-flowise --client claude
+npx -y @smithery/cli install @andydukes/mcp-flowise --client claude
 ```
 
 ### Prerequisites
@@ -44,7 +44,7 @@ npx -y @smithery/cli install @matthewhand/mcp-flowise --client claude
 Confirm you can run the server directly from the GitHub repository using `uvx`:
 
 ```bash
-uvx --from git+https://github.com/matthewhand/mcp-flowise mcp-flowise
+uvx --from git+https://github.com/andydukes/mcp-flowise mcp-flowise
 ```
 
 ### Adding to MCP Ecosystem (`mcpServers` Configuration)
@@ -58,7 +58,7 @@ You can integrate `mcp-flowise` into your MCP ecosystem by adding it to the `mcp
             "command": "uvx",
             "args": [
                 "--from",
-                "git+https://github.com/matthewhand/mcp-flowise",
+                "git+https://github.com/andydukes/mcp-flowise",
                 "mcp-flowise"
             ],
             "env": {
@@ -116,7 +116,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
         "LOGLEVEL": "ERROR",
         "APPDATA": "C:\\Users\\matth\\AppData\\Roaming",
         "FLOWISE_API_KEY": "your-api-key-goes-here",
-        "FLOWISE_API_ENDPOINT": "http://localhost:3000/"
+        "FLOWISE_API_ENDPOINT": "http://localhost:3010/"
       }
     }
   }
@@ -134,7 +134,7 @@ If you're using `uvx` on Windows and encounter issues with `--from git+https`, t
 ### General
 
 - `FLOWISE_API_KEY`: Your Flowise API Bearer token (**required**).
-- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:3000`).
+- `FLOWISE_API_ENDPOINT`: Base URL for Flowise (default: `http://localhost:3010`).
 
 ### LowLevel Mode (Default)
 

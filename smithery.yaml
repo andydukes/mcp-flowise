@@ -13,7 +13,7 @@ startCommand:
         description: Your Flowise API Bearer token
       flowiseApiEndpoint:
         type: string
-        default: http://localhost:3000
+        default: http://localhost:3010
         description: Base URL for Flowise
       flowiseSimpleMode:
         type: boolean
@@ -28,4 +28,4 @@ startCommand:
   commandFunction:
     # A function that produces the CLI command to start the MCP on stdio.
     |-
-    (config) => ({command: 'uvx', args: ['--from', 'git+https://github.com/matthewhand/mcp-flowise', 'mcp-flowise'], env: {FLOWISE_API_KEY: config.flowiseApiKey, FLOWISE_API_ENDPOINT: config.flowiseApiEndpoint || 'http://localhost:3000', FLOWISE_SIMPLE_MODE: config.flowiseSimpleMode ? 'true' : 'false', FLOWISE_CHATFLOW_ID: config.flowiseChatflowId || '', FLOWISE_ASSISTANT_ID: config.flowiseAssistantId || ''}})
+    (config) => ({command: 'uvx', args: ['--from', 'git+https://github.com/andydukes/mcp-flowise', 'mcp-flowise'], env: {FLOWISE_API_KEY: config.flowiseApiKey, FLOWISE_API_ENDPOINT: config.flowiseApiEndpoint || 'http://localhost:3010', FLOWISE_SIMPLE_MODE: config.flowiseSimpleMode ? 'true' : 'false', FLOWISE_CHATFLOW_ID: config.flowiseChatflowId || '', FLOWISE_ASSISTANT_ID: config.flowiseAssistantId || ''}})

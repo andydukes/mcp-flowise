@@ -18,7 +18,7 @@ EXPOSE 8000
 
 # Set environment variables required for running the MCP server
 ENV FLOWISE_API_KEY=your_api_key
-ENV FLOWISE_API_ENDPOINT=http://localhost:3000
+ENV FLOWISE_API_ENDPOINT=http://localhost:3010
 
 # Define the command to run the app
-CMD ["uvx", "--from", "git+https://github.com/matthewhand/mcp-flowise", "mcp-flowise"]
+CMD ["uvx", "--from", "git+https://github.com/andydukes/mcp-flowise", "mcp-flowise"]
